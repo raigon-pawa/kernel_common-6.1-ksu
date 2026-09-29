@@ -70,9 +70,9 @@ struct shmid_kernel /* private to the kernel */
 
 	/*
 	 * List by creator. task_lock(->shm_creator) required for read/write.
-	 * If list_empty(), then the creator is dead already.
+	 * If hlist_unhashed(), then the creator is dead already.
 	 */
-	struct list_head	shm_clist;
+	struct hlist_node	shm_clist;
 	struct ipc_namespace	*ns;
 } __randomize_layout;
 
@@ -250,7 +250,7 @@ static inline void shm_clist_rm(struct shmid_kernel *shp)
 	 * A concurrent exit_shm may do a list_del_init() as well.
 	 * Just do nothing if exit_shm already did the work
 	 */
-	if (!list_empty(&shp->shm_clist)) {
+	if (!hlist_unhashed_lockless(&shp->shm_clist)) {
 		/*
 		 * shp->shm_creator is guaranteed to be valid *only*
 		 * if shp->shm_clist is not empty.
@@ -262,7 +262,7 @@ static inline void shm_clist_rm(struct shmid_kernel *shp)
 		 * list_del_init() is a nop if the entry was already removed
 		 * from the list.
 		 */
-		list_del_init(&shp->shm_clist);
+		hlist_del_init(&shp->shm_clist);
 		task_unlock(creator);
 	}
 	rcu_read_unlock();
@@ -418,7 +418,7 @@ static int shm_try_destroy_orphaned(int id, void *p, void *data)
 	 * shm_nattch can be changed under shm_perm.lock without holding the
 	 * rwsem, so take the object lock before checking shm_may_destroy().
 	 */
-	if (!list_empty(&shp->shm_clist))
+	if (!hlist_unhashed_lockless(&shp->shm_clist))
 		return 0;
 
 	shm_lock_by_ptr(shp);
@@ -449,12 +449,12 @@ void exit_shm(struct task_struct *task)
 
 		task_lock(task);
 
-		if (list_empty(&task->sysvshm.shm_clist)) {
+		if (hlist_empty(&task->sysvshm.shm_clist)) {
 			task_unlock(task);
 			break;
 		}
 
-		shp = list_first_entry(&task->sysvshm.shm_clist, struct shmid_kernel,
+		shp = hlist_entry(task->sysvshm.shm_clist.first, struct shmid_kernel,
 				shm_clist);
 
 		/*
@@ -482,7 +482,7 @@ void exit_shm(struct task_struct *task)
 		ns = get_ipc_ns_not_zero(ns);
 		if (!ns) {
 unlink_continue:
-			list_del_init(&shp->shm_clist);
+			hlist_del_init(&shp->shm_clist);
 			task_unlock(task);
 			continue;
 		}
@@ -501,7 +501,7 @@ unlink_continue:
 		 *    only the refcounts obtained above prevent IPC_RMID
 		 *    from destroying the segment or the namespace.
 		 */
-		list_del_init(&shp->shm_clist);
+		hlist_del_init(&shp->shm_clist);
 
 		task_unlock(task);
 
@@ -792,7 +792,7 @@ static int newseg(struct ipc_namespace *ns, struct ipc_params *params)
 	shp->ns = ns;
 
 	task_lock(current);
-	list_add(&shp->shm_clist, &current->sysvshm.shm_clist);
+	hlist_add_head(&shp->shm_clist, &current->sysvshm.shm_clist);
 	task_unlock(current);
 
 	/*
