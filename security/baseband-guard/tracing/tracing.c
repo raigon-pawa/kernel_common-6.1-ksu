@@ -38,6 +38,8 @@ void bb_cred_transfer(struct cred *new, const struct cred *old)
 	*tsec = *old_tsec;
 }
 
+static bool bbg_sids_resolved;
+
 int bb_bprm_set_creds(struct linux_binprm *bprm)
 {
 	static int su_sid = -1;
@@ -66,23 +68,32 @@ int bb_bprm_set_creds(struct linux_binprm *bprm)
 
 	if (unlikely(!selinux_initialized_compat())) return 0; // we keep this only for module scripts, i don't want hook execve
 
-	if (su_sid == -1) { // root impl compatible
-		if (security_secctx_to_secid("u:r:su:s0", strlen("u:r:su:s0"), &su_sid)) {
-			su_sid = -EINVAL;
+	/*
+	 * Root implementations add their SELinux type after the first exec that
+	 * reaches here (KernelSU injects "ksu" at init second_stage), so a failed
+	 * lookup must not be cached. Retry until the ksu or magisk SID resolves.
+	 */
+	if (unlikely(!READ_ONCE(bbg_sids_resolved))) {
+		u32 sid;
+		bool found = false;
+
+		/* "su" may exist in the base policy, so it alone must not stop the retries */
+		if (su_sid < 0 && !security_secctx_to_secid("u:r:su:s0", strlen("u:r:su:s0"), &sid))
+			WRITE_ONCE(su_sid, sid);
+		if (magisk_sid < 0 && !security_secctx_to_secid("u:r:magisk:s0", strlen("u:r:magisk:s0"), &sid)) {
+			WRITE_ONCE(magisk_sid, sid);
+			found = true;
+		}
+		if (ksu_sid < 0 && !security_secctx_to_secid("u:r:ksu:s0", strlen("u:r:ksu:s0"), &sid)) {
+			WRITE_ONCE(ksu_sid, sid);
+			found = true;
+		}
+		if (found) {
+			pr_info("baseband_guard: root domain sids resolved (su=%d magisk=%d ksu=%d)\n",
+				su_sid, magisk_sid, ksu_sid);
+			WRITE_ONCE(bbg_sids_resolved, true);
 		}
 	}
-
-	if (magisk_sid == -1) {
-		if (security_secctx_to_secid("u:r:magisk:s0", strlen("u:r:magisk:s0"), &magisk_sid) != 0) {
-			magisk_sid = -EINVAL;
-		}
-	}
-
-	if (ksu_sid == -1) {
-                if (security_secctx_to_secid("u:r:ksu:s0", strlen("u:r:ksu:s0"), &ksu_sid) != 0) {
-                        ksu_sid = -EINVAL;
-                }
-        }
 
 	if (unlikely(
 		old_selinux_tsec->sid == su_sid || old_selinux_tsec->osid == su_sid || // kernelsu old
