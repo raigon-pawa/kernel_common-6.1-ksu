@@ -25,10 +25,9 @@ else
   BBG_DIR := $(srctree)/$(src)
 endif
 
-$(shell cd $(BBG_DIR) && test -f .git/shallow && $(GIT_BIN) fetch --unshallow)
-
-REPO_LINK := $(shell cd $(BBG_DIR) && $(GIT_BIN) remote get-url origin 2>/dev/null)
-COMMIT_SHA := $(shell cd $(BBG_DIR) && $(GIT_BIN) rev-parse --short=8 HEAD 2>/dev/null)
+# Vendored into the kernel tree: git would report the kernel's repo, not BBG's.
+REPO_LINK := https://github.com/vc-teahouse/Baseband-guard
+COMMIT_SHA := a54e0dc6
 
 ifeq ($(strip $(REPO_LINK)),)
   REPO_LINK := unknown
