@@ -8,9 +8,12 @@ with root, root hiding and extra features added. It keeps GrapheneOS's own
 kernel source and **the phone's stock, GrapheneOS-signed vendor modules**,
 so only `boot.img` changes.
 
+Downloads (kernel `Image` and flashable AnyKernel3 zips) are on the
+[Releases](https://github.com/raigon-pawa/kernel_common-6.1-ksu/releases) page.
+
 | Branch | GrapheneOS kernel tag | Tested on |
 |---|---|---|
-| `ksu-2026091900` | `2026091900` (also used by `2026092500`) | Pixel 6 (oriole), GrapheneOS 2026091901 |
+| `ksu-2026091900` | `2026091900`, `2026092500` (same commit `1c17a250aecb`) | Pixel 6 (oriole), GrapheneOS 2026091901 and 2026092501 |
 
 Pixel 6 Pro (raven) builds from the same source but is **untested**.
 
@@ -40,7 +43,7 @@ This kernel **removes parts of GrapheneOS's hardening**:
 
 Only use it if you understand and accept that.
 
-## Compatibility: why each release matches exactly one GrapheneOS kernel
+## Compatibility: why each release matches only specific GrapheneOS builds
 
 GrapheneOS builds with `CONFIG_RANDSTRUCT_FULL`. The randomization seed is
 derived from the build timestamp, which is the **committer date of HEAD**.
@@ -49,8 +52,14 @@ The vendor modules on the phone only load if the seed matches. So:
 - Every commit on these branches keeps the committer date of the GrapheneOS tag
   commit (`GIT_COMMITTER_DATE="1789418757 -0400"` here). **Don't rebase or
   amend without it**, or every vendor module will fail with a `version magic` error.
-- After a GrapheneOS update, check whether its kernel tag still points to the
-  same commit. If it doesn't, the kernel must be rebuilt on the new tag.
+- A GrapheneOS phone build is named after its kernel tag plus a suffix
+  (e.g. build `2026092501` uses kernel tag `2026092500`). Before updating, check
+  whether the new kernel tag still points to the same commit:
+  ```bash
+  git ls-remote https://github.com/GrapheneOS/kernel_common-6.1 'refs/tags/2026092500^{}'
+  ```
+  If it prints `1c17a250aecb…`, this kernel keeps working. If not, the kernel
+  must be rebuilt on the new tag, and the flashable zip will refuse to install.
 - `uname -r` ends in the fork's commit hash. That's harmless, because modversions ignore the release string.
 
 ## Building
@@ -70,8 +79,37 @@ strings out/raviole/dist/Image | grep -m1 "Linux version 6"   # must end: Mon Se
 
 ## Installing
 
+### Flashable zip (AnyKernel3)
+
+The zip swaps only the kernel into the phone's own boot partition, keeping that
+build's stock ramdisk. It needs root, which KernelSU-Next in this kernel provides,
+and a root app that flashes AnyKernel3 zips (e.g. Kernel Flasher or Horizon Kernel
+Flasher). GrapheneOS recovery only accepts official signed updates, so it can't
+flash the zip.
+
+| Zip | Use |
+|---|---|
+| `GrapheneOS-oriole-KSU-r1-AK3.zip` | Flash the slot you're running |
+| `GrapheneOS-oriole-KSU-r1-AK3-inactive-slot.zip` | After a GrapheneOS update installs, **before rebooting**: flashes the updated slot so root survives the update |
+
+Before writing, the zip checks that the device is oriole, the bootloader is
+unlocked, and the boot image isn't Magisk-patched. It also checks that the target
+slot's kernel is stock `g1c17a250aecb` (or this kernel) with the matching
+RANDSTRUCT seed. Otherwise it aborts instead of causing a bootloop.
+
+- **Already running this kernel:** grant the flasher app root in the KernelSU-Next
+  manager, then flash the zip.
+- **First install on an unrooted phone:** make a boot image as shown below and
+  `fastboot boot` it (it doesn't flash anything), then flash the zip from there.
+- **GrapheneOS updates:** turn off automatic reboot for updates. When one finishes
+  installing, flash the inactive-slot zip, then reboot. If the update reboots first,
+  you'll be on the stock kernel without root; use the first-install route again.
+
+### Manual boot image
+
 Inject the kernel into **your own stock** GrapheneOS `boot.img` (from the factory
-image for the exact build you run), using `magiskboot`:
+image for the exact build you run; the ramdisk changes between releases), using
+`magiskboot`:
 
 ```bash
 ./magiskboot unpack boot.img
