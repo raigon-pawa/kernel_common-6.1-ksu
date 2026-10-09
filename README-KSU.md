@@ -13,7 +13,7 @@ Downloads (kernel `Image` and flashable AnyKernel3 zips) are on the
 
 | Branch | GrapheneOS kernel tag | Tested on |
 |---|---|---|
-| `ksu-2026091900` | `2026091900`, `2026092500` (same commit `1c17a250aecb`) | Pixel 6 (oriole), GrapheneOS 2026091901 and 2026092501 |
+| `ksu-2026100600` | `2026100600` (commit `5969734141aa`) | Pixel 6 (oriole), GrapheneOS 2026100601 |
 
 Pixel 6 Pro (raven) builds from the same source but is **untested**.
 
@@ -50,15 +50,15 @@ derived from the build timestamp, which is the **committer date of HEAD**.
 The vendor modules on the phone only load if the seed matches. So:
 
 - Every commit on these branches keeps the committer date of the GrapheneOS tag
-  commit (`GIT_COMMITTER_DATE="1789418757 -0400"` here). **Don't rebase or
+  commit (`GIT_COMMITTER_DATE="1791252349 -0400"` here). **Don't rebase or
   amend without it**, or every vendor module will fail with a `version magic` error.
 - A GrapheneOS phone build is named after its kernel tag plus a suffix
   (e.g. build `2026092501` uses kernel tag `2026092500`). Before updating, check
   whether the new kernel tag still points to the same commit:
   ```bash
-  git ls-remote https://github.com/GrapheneOS/kernel_common-6.1 'refs/tags/2026092500^{}'
+  git ls-remote https://github.com/GrapheneOS/kernel_common-6.1 'refs/tags/2026100600^{}'
   ```
-  If it prints `1c17a250aecb…`, this kernel keeps working. If not, the kernel
+  If it prints `5969734141aa…`, this kernel keeps working. If not, the kernel
   must be rebuilt on the new tag, and the flashable zip will refuse to install.
 - `uname -r` ends in the fork's commit hash. That's harmless, because modversions ignore the release string.
 
@@ -67,14 +67,14 @@ The vendor modules on the phone only load if the seed matches. So:
 Needs a Linux host with ~25 GB free (the tree plus build output is ~15 GB) (WSL2 works; keep the tree on the Linux filesystem, not `/mnt/c`).
 
 ```bash
-git clone --branch 2026091900 --depth 1 --recurse-submodules --shallow-submodules \
+git clone --branch 2026100600 --depth 1 --recurse-submodules --shallow-submodules \
     https://gitlab.com/grapheneos/kernel_pixel_6.1.git
 cd kernel_pixel_6.1/common/ack
 git remote add ksu https://github.com/raigon-pawa/kernel_common-6.1-ksu.git
-git fetch ksu ksu-2026091900 && git checkout ksu-2026091900
+git fetch ksu ksu-2026100600 && git checkout ksu-2026100600
 cd ../..
 KLEAF_REPO_MANIFEST=aosp_manifest.xml ./build_raviole.sh --lto=full
-strings out/raviole/dist/Image | grep -m1 "Linux version 6"   # must end: Mon Sep 14 20:45:57 UTC 2026
+strings out/raviole/dist/Image | grep -m1 "Linux version 6"   # must end: Tue Oct  6 02:05:49 UTC 2026
 ```
 
 ## Installing
@@ -89,12 +89,12 @@ flash the zip.
 
 | Zip | Use |
 |---|---|
-| `GrapheneOS-oriole-KSU-r1-AK3.zip` | Flash the slot you're running |
-| `GrapheneOS-oriole-KSU-r1-AK3-inactive-slot.zip` | After a GrapheneOS update installs, **before rebooting**: flashes the updated slot so root survives the update |
+| `GrapheneOS-oriole-KSU-2026100600-r1-AK3.zip` | Flash the slot you're running |
+| `GrapheneOS-oriole-KSU-2026100600-r1-AK3-inactive-slot.zip` | After a GrapheneOS update installs, **before rebooting**: flashes the updated slot so root survives the update |
 
 Before writing, the zip checks that the device is oriole, the bootloader is
 unlocked, and the boot image isn't Magisk-patched. It also checks that the target
-slot's kernel is stock `g1c17a250aecb` (or this kernel) with the matching
+slot's kernel is stock `g5969734141aa` (or this kernel) with the matching
 RANDSTRUCT seed. Otherwise it aborts instead of causing a bootloop.
 
 - **Already running this kernel:** grant the flasher app root in the KernelSU-Next
